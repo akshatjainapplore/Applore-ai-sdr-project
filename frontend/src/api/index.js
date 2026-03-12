@@ -1,0 +1,16 @@
+import axios from "axios";
+const api = axios.create({ baseURL: import.meta.env.VITE_API_URL || "", timeout: 30000 });
+export const getPipelineSummary = () => api.get("/api/pipeline/summary").then(r => r.data);
+export const getHotProspects = () => api.get("/api/pipeline/hot").then(r => r.data);
+export const getSchedulerLogs = () => api.get("/api/pipeline/logs").then(r => r.data);
+export const getProspects = (params = {}) => api.get("/api/prospects", { params }).then(r => r.data);
+export const getProspect = (id) => api.get(`/api/prospects/${id}`).then(r => r.data);
+export const updateProspect = (id, data) => api.patch(`/api/prospects/${id}`, data).then(r => r.data);
+export const deleteProspect = (id) => api.delete(`/api/prospects/${id}`).then(r => r.data);
+export const getScripts = (prospectId) => api.get(`/api/scripts/${prospectId}`).then(r => r.data);
+export const updateScript = (id, data) => api.patch(`/api/scripts/${id}`, data).then(r => r.data);
+export const getSettings = () => api.get("/api/settings").then(r => r.data);
+export const updateSettings = (data) => api.patch("/api/settings", data).then(r => r.data);
+export const triggerDailyJob = () => api.post("/api/scheduler/run").then(r => r.data);
+export const getCampaigns = () => api.get("/api/instantly/campaigns").then(r => r.data);
+export default api;
