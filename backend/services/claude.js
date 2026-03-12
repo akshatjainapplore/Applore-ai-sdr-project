@@ -1,9 +1,21 @@
 const Anthropic = require("@anthropic-ai/sdk");
-
 const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
 
+/**
+ * Extracts first name from email (e.g. john.doe@applore.in -> John)
+ */
+function senderNameFromEmail(email) {
+  if (!email) return "Rav"; // Fallback to Rav if no email
+  const localPart = email.split("@")[0];
+  const firstName = localPart.split(".")[0].split("_")[0].split("-")[0];
+  return firstName.charAt(0).toUpperCase() + firstName.slice(1);
+}
+
 async function researchCompany(company) {
+  const currentYear = new Date().getFullYear();
   const prompt = `You are a senior B2B sales researcher for Applore Technologies, an AI product development company.
+
+Current year: ${currentYear}. When researching, prioritize events from the last 2 years (${currentYear-1}-${currentYear}).
 
 Research this company and return a JSON object. Return ONLY valid JSON, no markdown:
 
@@ -14,7 +26,7 @@ Country: ${company.country}
 
 {
   "company_brief": "3-4 sentence brief: what they do, recent news, funding, pain points relevant to AI product development",
-  "trigger_signal": "Single most compelling recent event making this a good outreach target right now",
+  "trigger_signal": "Single most compelling recent event (ideally from ${currentYear-1} or ${currentYear}) making this a good outreach target right now",
   "decision_maker_title": "Best title to target: CTO / CPO / VP Engineering / Head of Product / CEO",
   "decision_maker_name": "Name if publicly known, otherwise null",
   "linkedin_search_query": "Exact LinkedIn search query e.g. CTO Tandem Bank London",
@@ -75,8 +87,12 @@ Country: ${company.country}
   throw new Error("Parse failed");
 }
 
-async function generateScripts(prospect, brief) {
+async function generateScripts(prospect, brief, senderEmail) {
+  const currentYear = new Date().getFullYear();
+  const senderName = senderNameFromEmail(senderEmail);
   const prompt = `You are a senior SDR at Applore Technologies writing personalised outreach for a European ${prospect.sector} company.
+
+Current year: ${currentYear}. CRITICAL: Never reference a year older than ${currentYear} (e.g. don't say "hope your year is going well" if referencing ${currentYear-1}).
 
 Applore: AI-powered product development — embed senior engineers into client teams, ship AI features in 8-12 weeks, no hire overhead.
 
@@ -88,9 +104,9 @@ Pain Points: ${(brief.pain_points || []).join(", ")}
 
 Write 7 outreach messages. Return ONLY valid JSON, no markdown:
 {
-  "email_1": { "subject": "...", "body": "personalised opener referencing trigger, 3-4 sentences, soft CTA for 20-min call. Sign off: Rav, CBO at Applore." },
-  "email_2": { "subject": "...", "body": "follow-up — engineering pain point + case study angle, 3-4 sentences. Sign off: Rav." },
-  "email_3": { "subject": "...", "body": "final nudge — short, respectful, 2-3 sentences. Sign off: Rav." },
+  "email_1": { "subject": "...", "body": "personalised opener referencing trigger, 3-4 sentences, soft CTA for 20-min call. Sign off: Best regards,\n${senderName}" },
+  "email_2": { "subject": "...", "body": "follow-up — engineering pain point + case study angle, 3-4 sentences. Sign off: Best regards,\n${senderName}" },
+  "email_3": { "subject": "...", "body": "final nudge — short, respectful, 2-3 sentences. Sign off: Best regards,\n${senderName}" },
   "linkedin_connection_note": "under 280 chars, personalised, references role and trigger",
   "linkedin_dm_1": "After connecting — context + 15-min call ask, 3-4 sentences",
   "linkedin_dm_2": "Case study angle follow-up, 2-3 sentences",

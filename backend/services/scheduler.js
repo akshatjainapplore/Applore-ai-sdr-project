@@ -2,7 +2,7 @@ const cron = require("node-cron");
 const supabase = require("../db/client");
 const { searchCompanies } = require("./vibe");
 const { researchCompany, generateScripts } = require("./claude");
-const { addContact } = require("./instantly");
+const { addContact, getCampaignSenderEmail } = require("./instantly");
 
 let isRunning = false;
 
@@ -32,6 +32,9 @@ async function runDailyJob() {
     const sectors = cfg.sectors || ["HealthTech", "FinTech"];
     const countries = cfg.countries || ["UK", "Germany", "Netherlands", "Sweden", "France", "Spain"];
     const dailyTarget = cfg.daily_lead_target || 10;
+    const campaignId = process.env.INSTANTLY_CAMPAIGN_ID;
+    const senderEmail = await getCampaignSenderEmail(campaignId);
+    console.log(`📧 Using sender email: ${senderEmail}`);
 
     // 2. Get existing company names to avoid duplicates
     const { data: existing } = await supabase.from("prospects").select("company_name");
@@ -88,8 +91,8 @@ async function runDailyJob() {
         }).eq("id", prospect.id);
 
         // Generate scripts
-        console.log(`✍️ Writing scripts for ${company.company_name}...`);
-        const scripts = await generateScripts(prospect, brief);
+        console.log(`✍️ Writing scripts for ${company.company_name} (Sender: ${senderEmail})...`);
+        const scripts = await generateScripts(prospect, brief, senderEmail);
         stats.leads_scripted++;
 
         await supabase.from("scripts").insert({
