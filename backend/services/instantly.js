@@ -1,14 +1,16 @@
 const axios = require("axios");
 
-const BASE = "https://api.instantly.ai/api/v1";
+const BASE = "https://api.instantly.ai/api/v2";
 
 function headers() {
-  return { Authorization: `Bearer ${process.env.INSTANTLY_API_KEY}` };
+  return { 
+    Authorization: `Bearer ${process.env.INSTANTLY_API_KEY}`,
+    'Content-Type': 'application/json'
+  };
 }
 
 async function addContact({ email, firstName, lastName, companyName, customFields, campaignId }) {
   const payload = {
-    api_key: process.env.INSTANTLY_API_KEY,
     campaign_id: campaignId || process.env.INSTANTLY_CAMPAIGN_ID,
     email,
     first_name: firstName || "",
@@ -16,27 +18,30 @@ async function addContact({ email, firstName, lastName, companyName, customField
     company_name: companyName || "",
     custom_variables: customFields || {},
   };
-  const res = await axios.post(`${BASE}/lead/add`, payload);
+  const res = await axios.post(`${BASE}/leads`, payload, { headers: headers() });
   return res.data;
 }
 
 async function getCampaigns() {
-  const res = await axios.get(`${BASE}/campaign/list`, {
-    params: { api_key: process.env.INSTANTLY_API_KEY, limit: 20, skip: 0 },
+  const res = await axios.get(`${BASE}/campaigns`, {
+    headers: headers(),
+    params: { limit: 20, skip: 0 },
   });
   return res.data;
 }
 
 async function getCampaignAnalytics(campaignId) {
   const res = await axios.get(`${BASE}/analytics/campaign/summary`, {
-    params: { api_key: process.env.INSTANTLY_API_KEY, campaign_id: campaignId },
+    headers: headers(),
+    params: { campaign_id: campaignId },
   });
   return res.data;
 }
 
 async function getLeadStatus(email) {
-  const res = await axios.get(`${BASE}/lead/get`, {
-    params: { api_key: process.env.INSTANTLY_API_KEY, email },
+  const res = await axios.get(`${BASE}/leads`, {
+    headers: headers(),
+    params: { email },
   });
   return res.data;
 }
