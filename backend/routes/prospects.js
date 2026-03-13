@@ -81,18 +81,32 @@ router.post("/import", async (req, res) => {
           continue;
         }
 
-        // 2. Insert new prospect
-        const { data: prospect, error: insErr } = await supabase
+        // 2. Insert new prospect (try verified_email, fall back to notes)
+        let insertData = {
+          company_name: lead.companyName,
+          website: lead.website || "",
+          status: "researching",
+          decision_maker_name: `${lead.firstName || ""} ${lead.lastName || ""}`.trim(),
+          notes: `verified_email:${lead.email}`
+        };
+
+        // Try with verified_email column first
+        let { data: prospect, error: insErr } = await supabase
           .from("prospects")
-          .insert({
-            company_name: lead.companyName,
-            website: lead.website || "",
-            status: "researching",
-            verified_email: lead.email,
-            decision_maker_name: `${lead.firstName || ""} ${lead.lastName || ""}`.trim()
-          })
+          .insert({ ...insertData, verified_email: lead.email })
           .select()
           .single();
+
+        // If verified_email column doesn't exist, insert without it
+        if (insErr && insErr.message.includes("verified_email")) {
+          const retry = await supabase
+            .from("prospects")
+            .insert(insertData)
+            .select()
+            .single();
+          prospect = retry.data;
+          insErr = retry.error;
+        }
 
         if (insErr || !prospect) throw new Error(insErr?.message || "Failed to insert prospect");
 

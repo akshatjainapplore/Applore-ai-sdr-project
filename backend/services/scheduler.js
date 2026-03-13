@@ -148,13 +148,17 @@ async function processProspect(prospectId, senderEmail) {
     // 4. Handle Final Stage
     const campaignId = process.env.INSTANTLY_CAMPAIGN_ID;
 
-    if (prospect.verified_email) {
+    // Get verified email from column or notes fallback
+    const verifiedEmail = prospect.verified_email || 
+      (prospect.notes?.startsWith("verified_email:") ? prospect.notes.replace("verified_email:", "") : null);
+
+    if (verifiedEmail) {
       // Auto-push back to Instantly if email is verified
-      console.log(`⚡ Auto-pushing ${prospect.company_name} to Instantly (${prospect.verified_email})...`);
+      console.log(`⚡ Auto-pushing ${prospect.company_name} to Instantly (${verifiedEmail})...`);
       const email1 = typeof scripts.email_1 === "string" ? JSON.parse(scripts.email_1) : scripts.email_1;
 
       const instRes = await addContact({
-        email: prospect.verified_email,
+        email: verifiedEmail,
         firstName: brief.decision_maker_name?.split(" ")[0] || "Hi",
         lastName: brief.decision_maker_name?.split(" ").slice(1).join(" ") || "",
         companyName: prospect.company_name,
