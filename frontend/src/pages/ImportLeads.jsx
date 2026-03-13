@@ -2,26 +2,29 @@ import React, { useState, useEffect } from "react";
 import { Download, Upload, Zap, Check, AlertCircle, Loader2 } from "lucide-react";
 
 export default function ImportLeads() {
-  const [method, setMethod] = useState("api"); // 'api' or 'csv'
+  const [method, setMethod] = useState("api"); // 'api', 'csv', or 'list'
   const [loading, setLoading] = useState(false);
   const [results, setResults] = useState(null);
   const [error, setError] = useState(null);
   const [campaignId, setCampaignId] = useState("");
+  const [listId, setListId] = useState("");
 
   const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
 
-  const handleApiImport = async () => {
+  const handleImportLeads = async (type) => {
     setLoading(true);
     setResults(null);
     setError(null);
     try {
-      // 1. Fetch leads from Instantly (via our backend helper)
-      const listRes = await fetch(`${API_BASE}/instantly/leads?campaignId=${campaignId}`);
-      if (!listRes.ok) throw new Error("Failed to fetch leads from Instantly");
+      let endpoint = type === 'api' 
+        ? `${API_BASE}/instantly/leads?campaignId=${campaignId}`
+        : `${API_BASE}/instantly/list/${listId}/leads`;
+
+      const listRes = await fetch(endpoint);
+      if (!listRes.ok) throw new Error(`Failed to fetch leads from Instantly ${type === 'api' ? 'Campaign' : 'List'}`);
       const leadsData = await listRes.json();
       
-      // Filter for leads with email
-      const validLeads = leadsData.filter(l => l.email).map(l => ({
+      const validLeads = (leadsData.items || leadsData).filter(l => l.email).map(l => ({
         email: l.email,
         firstName: l.first_name,
         lastName: l.last_name,
@@ -29,9 +32,8 @@ export default function ImportLeads() {
         website: l.website
       }));
 
-      if (validLeads.length === 0) throw new Error("No leads with verified emails found in this campaign.");
+      if (validLeads.length === 0) throw new Error("No leads with emails found.");
 
-      // 2. Submit to our import endpoint
       const importRes = await fetch(`${API_BASE}/prospects/import`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -119,9 +121,24 @@ export default function ImportLeads() {
           }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
             <Zap size={20} color={method === "api" ? "var(--accent)" : "var(--text-2)"} />
-            <span style={{ fontWeight: 600 }}>Instantly API</span>
+            <span style={{ fontWeight: 600 }}>Campign Import</span>
           </div>
-          <p style={{ fontSize: 12, color: "var(--text-2)" }}>Fetch directly from your active campaigns.</p>
+          <p style={{ fontSize: 12, color: "var(--text-2)" }}>Fetch from current campaign leads.</p>
+        </button>
+
+        <button 
+          onClick={() => setMethod("list")}
+          style={{
+            flex: 1, padding: "20px", borderRadius: 16, border: "2px solid",
+            borderColor: method === "list" ? "var(--accent)" : "var(--border)",
+            background: method === "list" ? "rgba(0,229,160,0.05)" : "var(--surface)",
+            color: "var(--text)", textAlign: "left", cursor: "pointer", transition: "all 0.2s"
+          }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+            <FileText size={20} color={method === "list" ? "var(--accent)" : "var(--text-2)"} />
+            <span style={{ fontWeight: 600 }}>Lead List</span>
+          </div>
+          <p style={{ fontSize: 12, color: "var(--text-2)" }}>Fetch from a SuperSearch lead list ID.</p>
         </button>
 
         <button 
@@ -141,7 +158,7 @@ export default function ImportLeads() {
       </div>
 
       <div style={{ background: "var(--surface)", borderRadius: 20, border: "1px solid var(--border)", padding: 40 }}>
-        {method === "api" ? (
+        {method === "api" && (
           <div>
             <div style={{ marginBottom: 24 }}>
               <label style={{ display: "block", fontSize: 13, color: "var(--text-2)", marginBottom: 8 }}>Campaign ID</label>
@@ -157,7 +174,7 @@ export default function ImportLeads() {
               />
             </div>
             <button 
-              onClick={handleApiImport}
+              onClick={() => handleImportLeads('api')}
               disabled={loading || !campaignId}
               style={{
                 width: "100%", padding: "14px", borderRadius: 12, background: "var(--accent)",
@@ -166,10 +183,42 @@ export default function ImportLeads() {
                 opacity: loading || !campaignId ? 0.6 : 1
               }}>
               {loading ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
-              {loading ? "Importing..." : "Fetch & Process Leads"}
+              {loading ? "Importing..." : "Fetch Campaign Leads"}
             </button>
           </div>
-        ) : (
+        )}
+
+        {method === "list" && (
+          <div>
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ display: "block", fontSize: 13, color: "var(--text-2)", marginBottom: 8 }}>Lead List ID</label>
+              <input 
+                type="text" 
+                placeholder="Paste the listID from your Instantly URL"
+                value={listId}
+                onChange={(e) => setListId(e.target.value)}
+                style={{
+                  width: "100%", padding: "12px 16px", borderRadius: 10, background: "var(--navy)",
+                  border: "1px solid var(--border)", color: "var(--text)", outline: "none"
+                }}
+              />
+            </div>
+            <button 
+              onClick={() => handleImportLeads('list')}
+              disabled={loading || !listId}
+              style={{
+                width: "100%", padding: "14px", borderRadius: 12, background: "var(--accent)",
+                color: "var(--navy)", fontWeight: 700, border: "none", cursor: "pointer",
+                display: "flex", alignItems: "center", justifyContent: "center", gap: 10,
+                opacity: loading || !listId ? 0.6 : 1
+              }}>
+              {loading ? <Loader2 size={18} className="animate-spin" /> : <Download size={18} />}
+              {loading ? "Importing..." : "Fetch Lead List Leads"}
+            </button>
+          </div>
+        )}
+
+        {method === "csv" && (
           <div style={{ textAlign: "center", padding: "20px 0" }}>
             <Upload size={40} color="var(--text-3)" style={{ marginBottom: 16 }} />
             <p style={{ color: "var(--text-2)", marginBottom: 24 }}>Select your Instantly export CSV</p>

@@ -29,4 +29,14 @@ router.get("/leads", async (req, res) => {
   }
 });
 
+router.get("/list/:listId/leads", async (req, res) => {
+  try {
+    const { getLeadListLeads } = require("../services/instantly");
+    const data = await getLeadListLeads(req.params.listId);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

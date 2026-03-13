@@ -82,4 +82,22 @@ async function getCampaignLeads(campaignId) {
   return res.data;
 }
 
-module.exports = { addContact, getCampaigns, getCampaignAnalytics, getLeadStatus, getCampaignSenderEmail, getCampaignLeads };
+async function getLeadListLeads(listId) {
+  const res = await axios.post(`${BASE}/leads/list`, {
+    list: listId,
+    limit: 100
+  }, {
+    headers: headers()
+  });
+  return res.data;
+}
+
+module.exports = { 
+  addContact, 
+  getCampaigns, 
+  getCampaignAnalytics, 
+  getLeadStatus, 
+  getCampaignSenderEmail, 
+  getCampaignLeads,
+  getLeadListLeads 
+};
