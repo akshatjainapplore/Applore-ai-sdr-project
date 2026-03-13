@@ -12,13 +12,18 @@ function headers() {
 async function addContact({ email, firstName, lastName, companyName, customFields, campaignId }) {
   const payload = {
     campaign_id: campaignId || process.env.INSTANTLY_CAMPAIGN_ID,
-    email,
-    first_name: firstName || "",
-    last_name: lastName || "",
-    company_name: companyName || "",
-    custom_variables: customFields || {},
+    skip_if_in_workspace: true,
+    leads: [
+      {
+        email,
+        first_name: firstName || "",
+        last_name: lastName || "",
+        company_name: companyName || "",
+        custom_variables: customFields || {},
+      }
+    ]
   };
-  const res = await axios.post(`${BASE}/leads`, payload, { headers: headers() });
+  const res = await axios.post(`${BASE}/leads/add`, payload, { headers: headers() });
   return res.data;
 }
 

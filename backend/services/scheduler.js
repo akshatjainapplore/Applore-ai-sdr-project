@@ -114,7 +114,7 @@ async function runDailyJob() {
             const email1 = typeof scripts.email_1 === "string" ? JSON.parse(scripts.email_1) : scripts.email_1;
             const contactEmail = `${company.company_name.toLowerCase().replace(/\s+/g, ".")}@${company.website?.replace("https://", "").replace("http://", "") || "unknown.com"}`;
 
-            await addContact({
+            const instRes = await addContact({
               email: contactEmail,
               firstName: brief.decision_maker_name?.split(" ")[0] || "Hi",
               lastName: brief.decision_maker_name?.split(" ").slice(1).join(" ") || "",
@@ -127,8 +127,12 @@ async function runDailyJob() {
               },
             });
 
+            const contactId = instRes.created_leads?.[0]?.id || instRes.id;
+
             await supabase.from("prospects").update({
               status: "pushed_to_instantly",
+              instantly_contact_id: contactId,
+              instantly_campaign_id: campaignId,
               linkedin_url: `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(brief.linkedin_search_query || "")}`,
             }).eq("id", prospect.id);
 
