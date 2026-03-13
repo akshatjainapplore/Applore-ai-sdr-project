@@ -9,7 +9,7 @@ export default function ImportLeads() {
   const [campaignId, setCampaignId] = useState("");
   const [listId, setListId] = useState("");
 
-  const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:4000/api";
+  const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
   const handleImportLeads = async (type) => {
     setLoading(true);
@@ -17,8 +17,8 @@ export default function ImportLeads() {
     setError(null);
     try {
       let endpoint = type === 'api' 
-        ? `${API_BASE}/instantly/leads?campaignId=${campaignId}`
-        : `${API_BASE}/instantly/list/${listId}/leads`;
+        ? `${API_BASE}/api/instantly/leads?campaignId=${campaignId}`
+        : `${API_BASE}/api/instantly/list/${listId}/leads`;
 
       const listRes = await fetch(endpoint);
       if (!listRes.ok) throw new Error(`Failed to fetch leads from Instantly ${type === 'api' ? 'Campaign' : 'List'}`);
@@ -34,7 +34,7 @@ export default function ImportLeads() {
 
       if (validLeads.length === 0) throw new Error("No leads with emails found.");
 
-      const importRes = await fetch(`${API_BASE}/prospects/import`, {
+      const importRes = await fetch(`${API_BASE}/api/prospects/import`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ leads: validLeads })
@@ -82,7 +82,7 @@ export default function ImportLeads() {
           website: r[webIdx]?.trim()
         }));
 
-        const importRes = await fetch(`${API_BASE}/prospects/import`, {
+        const importRes = await fetch(`${API_BASE}/api/prospects/import`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ leads })
