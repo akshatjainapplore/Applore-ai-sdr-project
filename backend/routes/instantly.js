@@ -19,4 +19,14 @@ router.get("/analytics/:campaignId", async (req, res) => {
   }
 });
 
+router.get("/leads", async (req, res) => {
+  try {
+    const { getCampaignLeads } = require("../services/instantly");
+    const data = await getCampaignLeads(req.query.campaignId);
+    res.json(data);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

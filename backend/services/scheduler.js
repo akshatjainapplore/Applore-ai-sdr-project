@@ -59,7 +59,7 @@ async function runDailyJob() {
     for (const company of newCompanies) {
       try {
         // Insert prospect
-        const { data: prospect } = await supabase
+        const { data: prospect, error: insErr } = await supabase
           .from("prospects")
           .insert({
             company_name: company.company_name,
@@ -72,83 +72,12 @@ async function runDailyJob() {
           .select()
           .single();
 
-        if (!prospect) continue;
+        if (insErr || !prospect) continue;
 
-        // Research
-        console.log(`🔍 Researching ${company.company_name}...`);
-        const brief = await researchCompany(company);
-        stats.leads_researched++;
-
-        // Update with research
-        await supabase.from("prospects").update({
-          company_brief: brief.company_brief,
-          trigger_signal: brief.trigger_signal,
-          decision_maker_title: brief.decision_maker_title,
-          decision_maker_name: brief.decision_maker_name,
-          linkedin_search_query: brief.linkedin_search_query,
-          funding_stage: brief.funding_stage,
-          status: "scripting",
-        }).eq("id", prospect.id);
-
-        // Generate scripts
-        console.log(`✍️ Writing scripts for ${company.company_name} (Sender: ${senderEmail})...`);
-        const scripts = await generateScripts(prospect, brief, senderEmail);
+        await processProspect(prospect.id, senderEmail);
+        stats.leads_researched++; // Approx increments
         stats.leads_scripted++;
-
-        await supabase.from("scripts").insert({
-          prospect_id: prospect.id,
-          email_1: JSON.stringify(scripts.email_1),
-          email_2: JSON.stringify(scripts.email_2),
-          email_3: JSON.stringify(scripts.email_3),
-          linkedin_connection_note: scripts.linkedin_connection_note,
-          linkedin_dm_1: scripts.linkedin_dm_1,
-          linkedin_dm_2: scripts.linkedin_dm_2,
-          linkedin_dm_3: scripts.linkedin_dm_3,
-        });
-
-        await supabase.from("prospects").update({ status: "scripted" }).eq("id", prospect.id);
-
-        // Push to Instantly if API key configured
-        if (process.env.INSTANTLY_API_KEY && process.env.INSTANTLY_CAMPAIGN_ID) {
-          try {
-            const email1 = typeof scripts.email_1 === "string" ? JSON.parse(scripts.email_1) : scripts.email_1;
-            const contactEmail = `${company.company_name.toLowerCase().replace(/\s+/g, ".")}@${company.website?.replace("https://", "").replace("http://", "") || "unknown.com"}`;
-
-            const instRes = await addContact({
-              email: contactEmail,
-              firstName: brief.decision_maker_name?.split(" ")[0] || "Hi",
-              lastName: brief.decision_maker_name?.split(" ").slice(1).join(" ") || "",
-              companyName: company.company_name,
-              customFields: {
-                company_brief: brief.company_brief?.slice(0, 200),
-                trigger_signal: brief.trigger_signal?.slice(0, 200),
-                email1_subject: email1?.subject,
-                email1_opener: email1?.body?.slice(0, 300),
-              },
-            });
-
-            const contactId = instRes.created_leads?.[0]?.id || instRes.id;
-
-            await supabase.from("prospects").update({
-              status: "pushed_to_instantly",
-              instantly_contact_id: contactId,
-              instantly_campaign_id: campaignId,
-              linkedin_url: `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(brief.linkedin_search_query || "")}`,
-            }).eq("id", prospect.id);
-
-            stats.leads_pushed_to_instantly++;
-            console.log(`⚡ Pushed ${company.company_name} to Instantly`);
-          } catch (instErr) {
-            console.error(`Instantly push failed for ${company.company_name}:`, instErr.message);
-            await supabase.from("prospects").update({ status: "linkedin_pending" }).eq("id", prospect.id);
-          }
-        } else {
-          await supabase.from("prospects").update({ status: "linkedin_pending" }).eq("id", prospect.id);
-        }
-
-        // Strict 65-second delay to accommodate Anthropic 30,000 TPM limit + Web Search tokens
-        await new Promise((r) => setTimeout(r, 65000));
-
+        
       } catch (companyErr) {
         console.error(`Error processing ${company.company_name}:`, companyErr.message);
         errors.push(`${company.company_name}: ${companyErr.message}`);
@@ -178,6 +107,93 @@ async function runDailyJob() {
   }
 }
 
+async function processProspect(prospectId, senderEmail) {
+  try {
+    // 1. Fetch prospect full data
+    const { data: prospect, error } = await supabase.from("prospects").select("*").eq("id", prospectId).single();
+    if (error || !prospect) throw new Error("Prospect not found: " + prospectId);
+
+    // 2. Research
+    console.log(`🔍 Researching ${prospect.company_name}...`);
+    const brief = await researchCompany({ company_name: prospect.company_name, website: prospect.website });
+
+    // Update with research
+    await supabase.from("prospects").update({
+      company_brief: brief.company_brief,
+      trigger_signal: brief.trigger_signal,
+      decision_maker_title: brief.decision_maker_title,
+      decision_maker_name: brief.decision_maker_name,
+      linkedin_search_query: brief.linkedin_search_query,
+      funding_stage: brief.funding_stage,
+      status: "scripting",
+    }).eq("id", prospectId);
+
+    // 3. Generate scripts
+    console.log(`✍️ Writing scripts for ${prospect.company_name}...`);
+    const scripts = await generateScripts(prospect, brief, senderEmail);
+
+    await supabase.from("scripts").insert({
+      prospect_id: prospectId,
+      email_1: JSON.stringify(scripts.email_1),
+      email_2: JSON.stringify(scripts.email_2),
+      email_3: JSON.stringify(scripts.email_3),
+      linkedin_connection_note: scripts.linkedin_connection_note,
+      linkedin_dm_1: scripts.linkedin_dm_1,
+      linkedin_dm_2: scripts.linkedin_dm_2,
+      linkedin_dm_3: scripts.linkedin_dm_3,
+    });
+
+    await supabase.from("prospects").update({ status: "scripted" }).eq("id", prospectId);
+
+    // 4. Handle Final Stage
+    const campaignId = process.env.INSTANTLY_CAMPAIGN_ID;
+
+    if (prospect.verified_email) {
+      // Auto-push back to Instantly if email is verified
+      console.log(`⚡ Auto-pushing ${prospect.company_name} to Instantly (${prospect.verified_email})...`);
+      const email1 = typeof scripts.email_1 === "string" ? JSON.parse(scripts.email_1) : scripts.email_1;
+
+      const instRes = await addContact({
+        email: prospect.verified_email,
+        firstName: brief.decision_maker_name?.split(" ")[0] || "Hi",
+        lastName: brief.decision_maker_name?.split(" ").slice(1).join(" ") || "",
+        companyName: prospect.company_name,
+        customFields: {
+          company_brief: brief.company_brief?.slice(0, 200),
+          trigger_signal: brief.trigger_signal?.slice(0, 200),
+          email1_subject: email1?.subject,
+          email1_opener: email1?.body?.slice(0, 300),
+        },
+        campaignId
+      });
+
+      const contactId = instRes.created_leads?.[0]?.id || instRes.id;
+
+      await supabase.from("prospects").update({
+        status: "pushed_to_instantly",
+        instantly_contact_id: contactId,
+        instantly_campaign_id: campaignId,
+      }).eq("id", prospectId);
+      
+      console.log(`✅ Pushed ${prospect.company_name} back to Instantly`);
+    } else {
+      // No verified email, stop at linkedin_pending
+      await supabase.from("prospects").update({ 
+        status: "linkedin_pending",
+        linkedin_url: `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(brief.linkedin_search_query || "")}`,
+      }).eq("id", prospectId);
+      console.log(`✅ Lead ${prospect.company_name} ready for manual verification`);
+    }
+
+    // Strict 65-second delay to accommodate Anthropic 30,000 TPM limit
+    await new Promise((r) => setTimeout(r, 65000));
+
+  } catch (err) {
+    console.error(`❌ Error in processProspect (${prospectId}):`, err.message);
+    await supabase.from("prospects").update({ status: "failed" }).eq("id", prospectId);
+  }
+}
+
 function init() {
   // Convert 7:00 IST to UTC (IST = UTC+5:30, so 7:00 IST = 1:30 UTC)
   const cronHour = parseInt(process.env.CRON_HOUR_UTC || "1");
@@ -192,4 +208,4 @@ function init() {
   });
 }
 
-module.exports = { init, runDailyJob };
+module.exports = { init, runDailyJob, processProspect };

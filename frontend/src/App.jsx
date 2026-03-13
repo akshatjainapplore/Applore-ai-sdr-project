@@ -8,9 +8,11 @@ import ProspectQueue from "./pages/ProspectQueue";
 import Scripts from "./pages/Scripts";
 import LinkedIn from "./pages/LinkedIn";
 import SettingsPage from "./pages/SettingsPage";
+import ImportLeads from "./pages/ImportLeads";
 
 const NAV = [
   { to: "/", icon: LayoutDashboard, label: "Dashboard" },
+  { to: "/import", icon: Download, label: "Import Leads" },
   { to: "/queue", icon: Users, label: "Prospect Queue" },
   { to: "/scripts", icon: FileText, label: "Scripts" },
   { to: "/linkedin", icon: Linkedin, label: "LinkedIn Pack" },
@@ -86,6 +88,7 @@ export default function App() {
         <main style={{ flex: 1, overflow: "auto", background: "var(--navy)" }}>
           <Routes>
             <Route path="/" element={<Dashboard />} />
+            <Route path="/import" element={<ImportLeads />} />
             <Route path="/queue" element={<ProspectQueue />} />
             <Route path="/scripts" element={<Scripts />} />
             <Route path="/linkedin" element={<LinkedIn />} />

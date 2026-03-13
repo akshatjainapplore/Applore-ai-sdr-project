@@ -42,6 +42,18 @@ function getMockCompanies(sectors, countries, limit) {
     { company_name: "ClearSettle", website: "clearsettle.com", sector: "FinTech", country: "Germany", employee_count: "73" },
     { company_name: "Diagnobot", website: "diagnobot.ai", sector: "HealthTech", country: "Netherlands", employee_count: "60" },
     { company_name: "KreditAI", website: "kreditai.de", sector: "FinTech", country: "Germany", employee_count: "67" },
+    { company_name: "NerveData", website: "nervedata.com", sector: "HealthTech", country: "Germany", employee_count: "55" },
+    { company_name: "PeakFlow", website: "peakflow.io", sector: "FinTech", country: "UK", employee_count: "68" },
+    { company_name: "BioMetrico", website: "biometrico.es", sector: "HealthTech", country: "Spain", employee_count: "45" },
+    { company_name: "Quantis Bank", website: "quantis.fr", sector: "FinTech", country: "France", employee_count: "90" },
+    { company_name: "EtherMed", website: "ethermed.nl", sector: "HealthTech", country: "Netherlands", employee_count: "30" },
+    { company_name: "ScaleTrade", website: "scaletrade.com", sector: "FinTech", country: "Sweden", employee_count: "75" },
+    { company_name: "LifeSense", website: "lifesense.uk", sector: "HealthTech", country: "UK", employee_count: "120" },
+    { company_name: "CoreVault", website: "corevault.de", sector: "FinTech", country: "Germany", employee_count: "50" },
+    { company_name: "PulsePath", website: "pulsepath.ai", sector: "HealthTech", country: "France", employee_count: "62" },
+    { company_name: "Nexus Pay", website: "nexuspay.io", sector: "FinTech", country: "Sweden", employee_count: "88" },
+    { company_name: "Zest Fin", website: "zestfin.co", sector: "FinTech", country: "UK", employee_count: "40" },
+    { company_name: "Aura Health", website: "aura.health", sector: "HealthTech", country: "USA", employee_count: "35" }
   ];
   return mocks.slice(0, limit);
 }

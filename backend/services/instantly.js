@@ -71,4 +71,15 @@ async function getLeadStatus(email) {
   return res.data;
 }
 
-module.exports = { addContact, getCampaigns, getCampaignAnalytics, getLeadStatus, getCampaignSenderEmail };
+async function getCampaignLeads(campaignId) {
+  const id = campaignId || process.env.INSTANTLY_CAMPAIGN_ID;
+  const res = await axios.post(`${BASE}/leads/list`, {
+    campaign: id,
+    limit: 100
+  }, {
+    headers: headers()
+  });
+  return res.data;
+}
+
+module.exports = { addContact, getCampaigns, getCampaignAnalytics, getLeadStatus, getCampaignSenderEmail, getCampaignLeads };
