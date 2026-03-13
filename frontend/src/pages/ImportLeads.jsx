@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { Download, Upload, Zap, Check, AlertCircle, Loader2 } from "lucide-react";
+import { Download, Upload, Zap, Check, AlertCircle, Loader2, FileText } from "lucide-react";
 
 export default function ImportLeads() {
   const [method, setMethod] = useState("api"); // 'api', 'csv', or 'list'
