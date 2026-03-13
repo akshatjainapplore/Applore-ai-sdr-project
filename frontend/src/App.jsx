@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { BrowserRouter, Routes, Route, NavLink, useLocation } from "react-router-dom";
 import {
-  LayoutDashboard, Users, FileText, Linkedin, Settings, Zap, ChevronRight, Activity
+  LayoutDashboard, Users, FileText, Linkedin, Settings, Zap, ChevronRight, Activity, Download
 } from "lucide-react";
 import Dashboard from "./pages/Dashboard";
 import ProspectQueue from "./pages/ProspectQueue";
