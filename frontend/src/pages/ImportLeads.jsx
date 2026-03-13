@@ -121,7 +121,7 @@ export default function ImportLeads() {
           }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
             <Zap size={20} color={method === "api" ? "var(--accent)" : "var(--text-2)"} />
-            <span style={{ fontWeight: 600 }}>Campign Import</span>
+            <span style={{ fontWeight: 600 }}>Campaign Import</span>
           </div>
           <p style={{ fontSize: 12, color: "var(--text-2)" }}>Fetch from current campaign leads.</p>
         </button>
