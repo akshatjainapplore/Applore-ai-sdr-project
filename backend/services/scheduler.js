@@ -1,10 +1,32 @@
 const cron = require("node-cron");
 const supabase = require("../db/client");
 const { searchCompanies } = require("./vibe");
-const { researchCompany, generateScripts } = require("./claude");
+const { researchAndGenerateScripts } = require("./claude");
 const { addContact, getCampaignSenderEmail } = require("./instantly");
 
 let isRunning = false;
+let queue = [];
+let processingQueue = false;
+
+async function addToQueue(prospectId, senderEmail) {
+  queue.push({ prospectId, senderEmail });
+  if (!processingQueue) {
+    runQueue();
+  }
+}
+
+async function runQueue() {
+  processingQueue = true;
+  while (queue.length > 0) {
+    const { prospectId, senderEmail } = queue.shift();
+    try {
+      await processProspect(prospectId, senderEmail);
+    } catch (err) {
+      console.error("Queue process error:", err.message);
+    }
+  }
+  processingQueue = false;
+}
 
 async function runDailyJob() {
   if (isRunning) {
@@ -108,30 +130,53 @@ async function runDailyJob() {
 }
 
 async function processProspect(prospectId, senderEmail) {
+  let prospect;
   try {
     // 1. Fetch prospect full data
-    const { data: prospect, error } = await supabase.from("prospects").select("*").eq("id", prospectId).single();
-    if (error || !prospect) throw new Error("Prospect not found: " + prospectId);
+    const res = await supabase.from("prospects").select("*").eq("id", prospectId).single();
+    prospect = res.data;
+    if (res.error || !prospect) throw new Error("Prospect not found: " + prospectId);
 
-    // 2. Research
-    console.log(`🔍 Researching ${prospect.company_name}...`);
-    const brief = await researchCompany({ company_name: prospect.company_name, website: prospect.website });
+    // 2. Check for cached research
+    console.log(`🔍 Checking cache for ${prospect.company_name}...`);
+    const { data: cached } = await supabase
+      .from("prospects")
+      .select("company_brief, trigger_signal, decision_maker_title, decision_maker_name, linkedin_search_query, funding_stage")
+      .eq("company_name", prospect.company_name)
+      .not("company_brief", "is", null)
+      .neq("id", prospectId)
+      .limit(1)
+      .maybeSingle();
+
+    let researchData;
+    let scripts;
+
+    if (cached) {
+      console.log(`♻️ Reusing cached research for ${prospect.company_name}`);
+      researchData = cached;
+      // Since we are reusing research, we still need scripts. 
+      // We pass the cached research to Claude to generate scripts via Haiku.
+      const result = await researchAndGenerateScripts({ ...prospect, ...cached }, senderEmail);
+      scripts = result.scripts;
+    } else {
+      console.log(`🧠 No cache found. Calling Claude for ${prospect.company_name}...`);
+      const result = await researchAndGenerateScripts(prospect, senderEmail);
+      researchData = result.research;
+      scripts = result.scripts;
+    }
 
     // Update with research
     await supabase.from("prospects").update({
-      company_brief: brief.company_brief,
-      trigger_signal: brief.trigger_signal,
-      decision_maker_title: brief.decision_maker_title,
-      decision_maker_name: brief.decision_maker_name,
-      linkedin_search_query: brief.linkedin_search_query,
-      funding_stage: brief.funding_stage,
-      status: "scripting",
+      company_brief: researchData.company_brief,
+      trigger_signal: researchData.trigger_signal,
+      decision_maker_title: researchData.decision_maker_title,
+      decision_maker_name: researchData.decision_maker_name,
+      linkedin_search_query: researchData.linkedin_search_query,
+      funding_stage: researchData.funding_stage,
+      status: "scripted",
     }).eq("id", prospectId);
 
-    // 3. Generate scripts
-    console.log(`✍️ Writing scripts for ${prospect.company_name}...`);
-    const scripts = await generateScripts(prospect, brief, senderEmail);
-
+    // 3. Save scripts
     await supabase.from("scripts").insert({
       prospect_id: prospectId,
       email_1: JSON.stringify(scripts.email_1),
@@ -143,14 +188,17 @@ async function processProspect(prospectId, senderEmail) {
       linkedin_dm_3: scripts.linkedin_dm_3,
     });
 
-    await supabase.from("prospects").update({ status: "scripted" }).eq("id", prospectId);
-
     // 4. Handle Final Stage
     const campaignId = process.env.INSTANTLY_CAMPAIGN_ID;
 
     // Get verified email from column or notes fallback
-    const verifiedEmail = prospect.verified_email || 
+    let verifiedEmail = prospect.verified_email || 
       (prospect.notes?.startsWith("verified_email:") ? prospect.notes.replace("verified_email:", "") : null);
+
+    // FIX: If notes contained an error, it might look like "email@domain.com | error: ..."
+    if (verifiedEmail && verifiedEmail.includes("|")) {
+      verifiedEmail = verifiedEmail.split("|")[0].trim();
+    }
 
     if (verifiedEmail) {
       // Auto-push back to Instantly if email is verified
@@ -159,12 +207,12 @@ async function processProspect(prospectId, senderEmail) {
 
       const instRes = await addContact({
         email: verifiedEmail,
-        firstName: brief.decision_maker_name?.split(" ")[0] || "Hi",
-        lastName: brief.decision_maker_name?.split(" ").slice(1).join(" ") || "",
+        firstName: researchData.decision_maker_name?.split(" ")[0] || "Hi",
+        lastName: researchData.decision_maker_name?.split(" ").slice(1).join(" ") || "",
         companyName: prospect.company_name,
         customFields: {
-          company_brief: brief.company_brief?.slice(0, 200),
-          trigger_signal: brief.trigger_signal?.slice(0, 200),
+          company_brief: researchData.company_brief?.slice(0, 200),
+          trigger_signal: researchData.trigger_signal?.slice(0, 200),
           email1_subject: email1?.subject,
           email1_opener: email1?.body?.slice(0, 300),
         },
@@ -172,6 +220,10 @@ async function processProspect(prospectId, senderEmail) {
       });
 
       const contactId = instRes.created_leads?.[0]?.id || instRes.id;
+      
+      if (!contactId) {
+        throw new Error("Instantly push failed: No contact ID returned. Response: " + JSON.stringify(instRes));
+      }
 
       await supabase.from("prospects").update({
         status: "pushed_to_instantly",
@@ -184,17 +236,22 @@ async function processProspect(prospectId, senderEmail) {
       // No verified email, stop at linkedin_pending
       await supabase.from("prospects").update({ 
         status: "linkedin_pending",
-        linkedin_url: `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(brief.linkedin_search_query || "")}`,
+        linkedin_url: `https://www.linkedin.com/search/results/people/?keywords=${encodeURIComponent(researchData.linkedin_search_query || "")}`,
       }).eq("id", prospectId);
       console.log(`✅ Lead ${prospect.company_name} ready for manual verification`);
     }
 
-    // Strict 65-second delay to accommodate Anthropic 30,000 TPM limit
-    await new Promise((r) => setTimeout(r, 65000));
-
   } catch (err) {
     console.error(`❌ Error in processProspect (${prospectId}):`, err.message);
-    await supabase.from("prospects").update({ status: "failed" }).eq("id", prospectId);
+    const errorMsg = `error: ${err.message}`.slice(0, 500);
+    await supabase.from("prospects").update({ 
+      status: "failed",
+      notes: (prospect?.notes ? prospect.notes + " | " : "") + errorMsg
+    }).eq("id", prospectId);
+  } finally {
+    // Strict 65-second delay to accommodate Anthropic 30,000 TPM limit
+    // Doing it in finally ensures we don't spam if a lead fails
+    await new Promise((r) => setTimeout(r, 65000));
   }
 }
 
@@ -212,4 +269,4 @@ function init() {
   });
 }
 
-module.exports = { init, runDailyJob, processProspect };
+module.exports = { init, runDailyJob, processProspect, addToQueue };

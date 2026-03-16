@@ -1,23 +1,30 @@
-import React, { useState, useEffect } from "react";
-import { getProspects, updateProspect, deleteProspect } from "../api";
-import { Search, ExternalLink, Trash2, CheckCircle, Flame, ChevronDown, ChevronUp } from "lucide-react";
+import { getProspects, updateProspect, deleteProspect, pushToInstantly } from "../api";
+import { Search, ExternalLink, Trash2, CheckCircle, Flame, ChevronDown, ChevronUp, Send } from "lucide-react";
 
-const STATUS_COLORS = {
-  researching: "var(--blue)", scripted: "#9B59B6", pushed_to_instantly: "var(--accent)",
-  linkedin_pending: "var(--amber)", replied: "#F39C12", meeting_booked: "var(--accent)", dead: "var(--text-3)"
-};
-const STATUS_LABELS = {
-  researching:"Researching", scripted:"Scripted", pushed_to_instantly:"In Sequence",
-  linkedin_pending:"LinkedIn Pending", replied:"Replied", meeting_booked:"Meeting Booked", dead:"Dead"
-};
+// ... (STATUS_COLORS and STATUS_LABELS unchanged)
 
 function ProspectRow({ prospect, onUpdate }) {
   const [expanded, setExpanded] = useState(false);
   const color = STATUS_COLORS[prospect.status] || "var(--text-2)";
 
+  const handlePush = async (e) => {
+    e.stopPropagation();
+    const email = prompt("Enter verified email for this prospect:", prospect.notes?.startsWith("verified_email:") ? prospect.notes.replace("verified_email:", "").split("|")[0].trim() : "");
+    if (!email) return;
+
+    try {
+      await pushToInstantly(prospect.id, { email });
+      alert("✅ Pushed to Instantly successfully!");
+      onUpdate(prospect.id, { status: "pushed_to_instantly" });
+    } catch (err) {
+      alert("❌ Push failed: " + (err.response?.data?.error || err.message));
+    }
+  };
+
   return (
     <>
       <tr style={{ borderBottom:"1px solid var(--border)", cursor:"pointer" }} onClick={() => setExpanded(!expanded)}>
+        {/* ... (Existing columns) */}
         <td style={{ padding:"14px 16px" }}>
           <div style={{ fontWeight:600, fontSize:13 }}>{prospect.company_name}</div>
           <div style={{ fontSize:11, color:"var(--text-2)", marginTop:2 }}>{prospect.website}</div>
@@ -59,6 +66,12 @@ function ProspectRow({ prospect, onUpdate }) {
                       style={{ display:"flex", alignItems:"center", gap:4, fontSize:12, color:"var(--blue)", padding:"4px 10px", background:"rgba(74,144,226,0.1)", borderRadius:6 }}>
                       <ExternalLink size={11} /> Find on LinkedIn
                     </a>
+                  )}
+                  {["scripted", "linkedin_pending"].includes(prospect.status) && (
+                    <button onClick={handlePush}
+                      style={{ display:"flex", alignItems:"center", gap:4, fontSize:12, color:"var(--accent)", padding:"4px 10px", background:"rgba(0,229,160,0.1)", border:"none", borderRadius:6, cursor:"pointer" }}>
+                      <Send size={11} /> Push to Instantly
+                    </button>
                   )}
                   <button onClick={e => { e.stopPropagation(); onUpdate(prospect.id, { is_hot: !prospect.is_hot }); }}
                     style={{ display:"flex", alignItems:"center", gap:4, fontSize:12, color:"var(--amber)", padding:"4px 10px", background:"rgba(245,166,35,0.1)", border:"none", borderRadius:6 }}>

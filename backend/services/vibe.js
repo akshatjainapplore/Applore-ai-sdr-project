@@ -1,31 +1,48 @@
 const axios = require("axios");
 
-const BASE = "https://vibeprospecting.explorium.ai/api";
+const BASE = "https://api.explorium.ai/v1";
 
 /**
  * Search for companies matching ICP
  */
 async function searchCompanies({ sectors, countries, employeeMin, employeeMax, limit = 10 }) {
   try {
+    // Mapping our countries to lowercase alpha-2 (e.g. UK -> gb)
+    const countryMap = {
+      "UK": "gb", "Germany": "de", "Netherlands": "nl", "Sweden": "se", 
+      "France": "fr", "Spain": "es", "USA": "us"
+    };
+
     const res = await axios.post(
-      `${BASE}/companies/search`,
+      `${BASE}/businesses`,
       {
-        sectors,
-        countries,
-        employee_count: { min: employeeMin, max: employeeMax },
-        limit,
+        mode: "full",
+        page_size: limit,
+        filters: {
+          country_code: {
+            values: countries.map(c => countryMap[c] || c.toLowerCase())
+          },
+          linkedin_category: {
+            values: sectors
+          },
+          employee_count: {
+            min: employeeMin,
+            max: employeeMax
+          }
+        }
       },
       {
         headers: {
-          Authorization: `Bearer ${process.env.VIBE_API_KEY}`,
+          api_key: process.env.VIBE_API_KEY,
           "Content-Type": "application/json",
         },
       }
     );
-    return res.data.companies || res.data || [];
+    // Explorium v1 businesses endpoint returns list in res.data
+    return res.data || [];
   } catch (err) {
-    console.error("Vibe Prospecting error:", err.response?.data || err.message);
-    // Return mock data if Vibe API not configured — remove when API key active
+    console.error("Vibe/Explorium API error:", err.response?.data || err.message);
+    // Return mock data if API fails or not fully configured
     return getMockCompanies(sectors, countries, limit);
   }
 }

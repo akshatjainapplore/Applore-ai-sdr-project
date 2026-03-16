@@ -13,4 +13,5 @@ export const getSettings = () => api.get("/api/settings").then(r => r.data);
 export const updateSettings = (data) => api.patch("/api/settings", data).then(r => r.data);
 export const triggerDailyJob = () => api.post("/api/scheduler/run").then(r => r.data);
 export const getCampaigns = () => api.get("/api/instantly/campaigns").then(r => r.data);
+export const pushToInstantly = (id, data) => api.post(`/api/prospects/${id}/push-to-instantly`, data).then(r => r.data);
 export default api;
